@@ -37,8 +37,6 @@ vector<int> NeuralNetwork::getOutputNodeIds() const {
     return this->outputNodeIds;
 }
 
-// --- NeuralNetwork Core Logic ---
-
 vector<double> NeuralNetwork::predict(DataInstance instance) {
     vector<double> input = instance.x;
 
@@ -47,30 +45,37 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
         return vector<double>();
     }
 
+    // Reset hidden/output nodes for fresh calculation
+    for (size_t i = 0; i < nodes.size(); i++) {
+        if (nodes[i] != nullptr) {
+            nodes[i]->preActivationValue = 0;
+            nodes[i]->postActivationValue = 0;
+        }
+    }
+
     // Initialize input nodes
     for (size_t i = 0; i < inputNodeIds.size(); i++) {
         nodes.at(inputNodeIds.at(i))->postActivationValue = input.at(i);
     }
 
-    queue<int> q;
-    for (int id : inputNodeIds) q.push(id);
+    // Process nodes in ID order (assuming topological order for standard NN layers)
+    for (int u = 0; u < (int)nodes.size(); u++) {
+        if (nodes[u] == nullptr) continue;
 
-    // Keep track of visited nodes to avoid redundant activations in BFT
-    set<int> visited(inputNodeIds.begin(), inputNodeIds.end());
+        bool isInput = false;
+        for (int id : inputNodeIds) {
+            if (id == u) {
+                isInput = true;
+                break;
+            }
+        }
 
-    while (!q.empty()) {
-        int u = q.front();
-        q.pop();
+        if (!isInput) {
+            visitPredictNode(u);
+        }
 
         for (auto& pair : adjacencyList.at(u)) {
-            int v = pair.first;
-            Connection& c = pair.second; // adjacencyList stores Connections
-
-            if (visited.find(v) == visited.end()) {
-                visitPredictNode(v);
-                visited.insert(v);
-                q.push(v);
-            }
+            Connection& c = pair.second;
             visitPredictNeighbor(c); 
         }
     }
@@ -90,7 +95,7 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
 }
 
 bool NeuralNetwork::contribute(double y, double p) {
-    contributions.clear();
+    contributions.clear(); 
     for (int inputId : inputNodeIds) {
         contribute(inputId, y, p);
     }
@@ -99,11 +104,11 @@ bool NeuralNetwork::contribute(double y, double p) {
 }
 
 double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
-    visitContributeStart(nodeId); 
-
     if (contributions.find(nodeId) != contributions.end()) {
         return contributions[nodeId];
     }
+
+    visitContributeStart(nodeId); 
 
     double outgoingContribution = 0;
 
@@ -115,15 +120,11 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
             Connection& c = pair.second;
             
             double incomingContribution = contribute(neighborId, y, p);
-            
-            // Note: pass outgoingContribution by reference as required by your .hpp
             visitContributeNeighbor(c, incomingContribution, outgoingContribution);
         }
     }
 
-    // visitContributeNode returns void, it updates the node internally
     visitContributeNode(nodeId, outgoingContribution);
-
     contributions[nodeId] = outgoingContribution;
     return outgoingContribution;
 }
@@ -131,8 +132,6 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
 bool NeuralNetwork::update() {
     if (batchSize == 0) return false;
 
-    // Update node biases
-    // Since 'nodes' is a vector of NodeInfo*, 'node' is the pointer directly
     for (NodeInfo* node : nodes) {
         if (node != nullptr) {
             node->bias -= (learningRate * (node->delta / batchSize));
@@ -140,11 +139,9 @@ bool NeuralNetwork::update() {
         }
     }
 
-    // Update connection weights
     for (int i = 0; i < (int)adjacencyList.size(); i++) {
         for (auto& pair : adjacencyList.at(i)) {
             Connection& c = pair.second;
-            // Access delta directly from the Connection object
             c.weight -= (learningRate * (c.delta / batchSize));
             c.delta = 0; 
         }

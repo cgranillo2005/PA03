@@ -110,13 +110,8 @@ void Graph::updateConnection(int v, int u, double w) {
         cerr << "Connection error: invalid node IDs" << endl;
         exit(1);
     }
-
-    // Access the connection object
     Connection& c = adjacencyList[v][u];
     c.weight = w;
-    
-    // Most likely member name is destId based on common UCSB CS24 patterns
-    // If this fails to compile, change it to 'dest'
     c.dest = u; 
 }
 
