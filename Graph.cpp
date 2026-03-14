@@ -91,7 +91,6 @@ std::ostream& operator<<(std::ostream& out, const Connection& c) {
 
 void Graph::updateNode(int id, NodeInfo n) {
     if (id < 0 || id >= (int)nodes.size()) {
-        cout << "Attempting to update node with id: " << id << " but node does not exist" << endl;
         return;
     }
     if (nodes[id] != nullptr) {
@@ -107,9 +106,9 @@ NodeInfo* Graph::getNode(int id) const {
 
 void Graph::updateConnection(int v, int u, double w) {
     if (v < 0 || v >= (int)nodes.size() || u < 0 || u >= (int)nodes.size()) {
-        cerr << "Connection error: invalid node IDs" << endl;
         exit(1);
     }
+    // Access the connection object and update properties
     Connection& c = adjacencyList[v][u];
     c.weight = w;
     c.dest = u; 

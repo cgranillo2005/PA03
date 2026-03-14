@@ -9,80 +9,66 @@ using namespace std;
 
 // --- NeuralNetwork Getters and Setters ---
 
-void NeuralNetwork::eval() {
-    this->evaluating = true;
-}
-
-void NeuralNetwork::train() {
-    this->evaluating = false;
-}
-
-void NeuralNetwork::setLearningRate(double lr) {
-    this->learningRate = lr;
-}
-
-void NeuralNetwork::setInputNodeIds(std::vector<int> inputNodeIds) {
-    this->inputNodeIds = inputNodeIds;
-}
-
-void NeuralNetwork::setOutputNodeIds(std::vector<int> outputNodeIds) {
-    this->outputNodeIds = outputNodeIds;
-}
-
-vector<int> NeuralNetwork::getInputNodeIds() const {
-    return this->inputNodeIds;
-}
-
-vector<int> NeuralNetwork::getOutputNodeIds() const {
-    return this->outputNodeIds;
-}
+void NeuralNetwork::eval() { this->evaluating = true; }
+void NeuralNetwork::train() { this->evaluating = false; }
+void NeuralNetwork::setLearningRate(double lr) { this->learningRate = lr; }
+void NeuralNetwork::setInputNodeIds(std::vector<int> inputNodeIds) { this->inputNodeIds = inputNodeIds; }
+void NeuralNetwork::setOutputNodeIds(std::vector<int> outputNodeIds) { this->outputNodeIds = outputNodeIds; }
+vector<int> NeuralNetwork::getInputNodeIds() const { return this->inputNodeIds; }
+vector<int> NeuralNetwork::getOutputNodeIds() const { return this->outputNodeIds; }
 
 vector<double> NeuralNetwork::predict(DataInstance instance) {
-    vector<double> input = instance.x;
+    if (instance.x.size() != inputNodeIds.size()) return vector<double>();
 
-    if (input.size() != inputNodeIds.size()) {
-        cerr << "input size mismatch." << endl;
-        return vector<double>();
-    }
-
-    // Reset hidden/output nodes for fresh calculation
-    for (size_t i = 0; i < nodes.size(); i++) {
-        if (nodes[i] != nullptr) {
-            nodes[i]->preActivationValue = 0;
-            nodes[i]->postActivationValue = 0;
+    // Reset all nodes to prevent accumulation from previous runs
+    for (auto* node : nodes) {
+        if (node) {
+            node->preActivationValue = 0;
+            node->postActivationValue = 0;
         }
     }
 
-    // Initialize input nodes
+    // Initialize in-degree map to ensure topological processing
+    unordered_map<int, int> inDegree;
+    for (int i = 0; i < (int)nodes.size(); i++) {
+        if (nodes[i] == nullptr) continue;
+        for (auto const& [neighborId, conn] : adjacencyList[i]) {
+            inDegree[neighborId]++;
+        }
+    }
+
+    queue<int> q;
+    // Initialize input nodes with instance values
     for (size_t i = 0; i < inputNodeIds.size(); i++) {
-        nodes.at(inputNodeIds.at(i))->postActivationValue = input.at(i);
+        int id = inputNodeIds[i];
+        nodes.at(id)->postActivationValue = instance.x.at(i);
+        q.push(id);
     }
 
-    // Process nodes in ID order (assuming topological order for standard NN layers)
-    for (int u = 0; u < (int)nodes.size(); u++) {
-        if (nodes[u] == nullptr) continue;
-
-        bool isInput = false;
-        for (int id : inputNodeIds) {
-            if (id == u) {
-                isInput = true;
-                break;
-            }
-        }
-
-        if (!isInput) {
-            visitPredictNode(u);
-        }
+    // Topological propagation
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop();
 
         for (auto& pair : adjacencyList.at(u)) {
+            int v = pair.first;
             Connection& c = pair.second;
+            
+            // Pass signal to neighbor
             visitPredictNeighbor(c); 
+
+            // Only activate neighbor once all incoming signals are summed
+            inDegree[v]--;
+            if (inDegree[v] == 0) {
+                visitPredictNode(v);
+                q.push(v);
+            }
         }
     }
 
     vector<double> output;
-    for (int dest : outputNodeIds) {
-        output.push_back(nodes.at(dest)->postActivationValue);
+    for (int id : outputNodeIds) {
+        output.push_back(nodes.at(id)->postActivationValue);
     }
 
     if (evaluating) {
@@ -104,23 +90,20 @@ bool NeuralNetwork::contribute(double y, double p) {
 }
 
 double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
-    if (contributions.find(nodeId) != contributions.end()) {
-        return contributions[nodeId];
-    }
+    if (contributions.count(nodeId)) return contributions[nodeId];
 
     visitContributeStart(nodeId); 
 
     double outgoingContribution = 0;
-
     if (adjacencyList.at(nodeId).empty()) {
+        // Log Loss derivative for binary classification output node
         outgoingContribution = -1.0 * ((y - p) / (p * (1.0 - p)));
     } else {
         for (auto& pair : adjacencyList.at(nodeId)) {
             int neighborId = pair.first;
             Connection& c = pair.second;
-            
-            double incomingContribution = contribute(neighborId, y, p);
-            visitContributeNeighbor(c, incomingContribution, outgoingContribution);
+            double incoming = contribute(neighborId, y, p);
+            visitContributeNeighbor(c, incoming, outgoingContribution);
         }
     }
 
@@ -132,15 +115,17 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
 bool NeuralNetwork::update() {
     if (batchSize == 0) return false;
 
+    // Apply accumulated deltas to biases
     for (NodeInfo* node : nodes) {
-        if (node != nullptr) {
+        if (node) {
             node->bias -= (learningRate * (node->delta / batchSize));
             node->delta = 0;
         }
     }
 
+    // Apply accumulated deltas to weights
     for (int i = 0; i < (int)adjacencyList.size(); i++) {
-        for (auto& pair : adjacencyList.at(i)) {
+        for (auto& pair : adjacencyList[i]) {
             Connection& c = pair.second;
             c.weight -= (learningRate * (c.delta / batchSize));
             c.delta = 0; 
