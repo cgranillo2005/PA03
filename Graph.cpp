@@ -123,6 +123,8 @@ void Graph::updateConnection(int v, int u, double w) {
 
     // Access the Connection object and update its specific weight field
     adjacencyList[v][u].weight = w;
+
+    adjacencyList[v][u].dest = u;
     
 }
 
