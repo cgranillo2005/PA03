@@ -90,12 +90,8 @@ std::ostream& operator<<(std::ostream& out, const Connection& c) {
 // Graph -----------------------------------------------------------------------------------------------------------------------------------
 
 void Graph::updateNode(int id, NodeInfo n) {
-    if (id < 0 || id >= (int)nodes.size()) {
-        return;
-    }
-    if (nodes[id] != nullptr) {
-        delete nodes[id];
-    }
+    if (id < 0 || id >= (int)nodes.size()) return;
+    if (nodes[id] != nullptr) delete nodes[id];
     nodes[id] = new NodeInfo(n);
 }
 
@@ -108,7 +104,7 @@ void Graph::updateConnection(int v, int u, double w) {
     if (v < 0 || v >= (int)nodes.size() || u < 0 || u >= (int)nodes.size()) {
         exit(1);
     }
-    // Access the connection object and update properties
+    // Update weight and destination. AdjacencyList is a vector of maps.
     Connection& c = adjacencyList[v][u];
     c.weight = w;
     c.dest = u; 
