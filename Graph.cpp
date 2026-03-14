@@ -117,7 +117,7 @@ void Graph::updateConnection(int v, int u, double w) {
     
     // Most likely member name is destId based on common UCSB CS24 patterns
     // If this fails to compile, change it to 'dest'
-    c.destId = u; 
+    c.dest = u; 
 }
 
 void Graph::clear() {
