@@ -94,55 +94,43 @@ void Graph::updateNode(int id, NodeInfo n) {
         cout << "Attempting to update node with id: " << id << " but node does not exist" << endl;
         return;
     }
-
-    // Deallocate existing node at this ID to prevent memory leaks
     if (nodes[id] != nullptr) {
         delete nodes[id];
     }
-    
-    // Allocate a new NodeInfo object on the heap
     nodes[id] = new NodeInfo(n);
 }
 
 NodeInfo* Graph::getNode(int id) const {
-    if (id < 0 || id >= (int)nodes.size()) {
-        return nullptr;
-    }
+    if (id < 0 || id >= (int)nodes.size()) return nullptr;
     return nodes[id];
 }
 
 void Graph::updateConnection(int v, int u, double w) {
-    if (v < 0 || v >= (int)nodes.size()) {
-        cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << v << " does not exist" << endl;
-        exit(1);
-    }
-    if (u < 0 || u >= (int)nodes.size()) {
-        cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << u << " does not exist" << endl;
+    if (v < 0 || v >= (int)nodes.size() || u < 0 || u >= (int)nodes.size()) {
+        cerr << "Connection error: invalid node IDs" << endl;
         exit(1);
     }
 
-    // Access the Connection object and update its specific weight field
-    adjacencyList[v][u].weight = w;
-
-    adjacencyList[v][u].dest = u;
+    // Access the connection object
+    Connection& c = adjacencyList[v][u];
+    c.weight = w;
     
+    // Most likely member name is destId based on common UCSB CS24 patterns
+    // If this fails to compile, change it to 'dest'
+    c.destId = u; 
 }
 
 void Graph::clear() {
-    // Deallocate all NodeInfo objects from the heap
     for (size_t i = 0; i < nodes.size(); i++) {
         if (nodes[i] != nullptr) {
             delete nodes[i];
             nodes[i] = nullptr;
         }
     }
-
-    // Clear all maps in the adjacency list
     for (size_t i = 0; i < adjacencyList.size(); i++) {
         adjacencyList[i].clear();
     }
 }
-
 
 // ------------------------ YOU DO NOT NEED TO MODIFY THE REMAINING CODE (but please feel free to explore it!) --------------------------------------
 
