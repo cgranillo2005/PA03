@@ -9,16 +9,21 @@ using namespace std;
 
 // --- NeuralNetwork Getters and Setters ---
 
+#include "NeuralNetwork.hpp"
+#include <iostream>
+#include <queue>
+#include <set>
+
 void NeuralNetwork::eval() { this->evaluating = true; }
 void NeuralNetwork::train() { this->evaluating = false; }
 void NeuralNetwork::setLearningRate(double lr) { this->learningRate = lr; }
 void NeuralNetwork::setInputNodeIds(std::vector<int> inputNodeIds) { this->inputNodeIds = inputNodeIds; }
 void NeuralNetwork::setOutputNodeIds(std::vector<int> outputNodeIds) { this->outputNodeIds = outputNodeIds; }
-vector<int> NeuralNetwork::getInputNodeIds() const { return this->inputNodeIds; }
-vector<int> NeuralNetwork::getOutputNodeIds() const { return this->outputNodeIds; }
+std::vector<int> NeuralNetwork::getInputNodeIds() const { return this->inputNodeIds; }
+std::vector<int> NeuralNetwork::getOutputNodeIds() const { return this->outputNodeIds; }
 
-vector<double> NeuralNetwork::predict(DataInstance instance) {
-    // 1. Reset all nodes for a clean pass
+std::vector<double> NeuralNetwork::predict(DataInstance instance) {
+    // 1. Reset node values
     for (auto* node : nodes) {
         if (node) {
             node->preActivationValue = 0;
@@ -26,38 +31,30 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
         }
     }
 
-    // 2. Set input values
+    // 2. Load input data
     for (size_t i = 0; i < inputNodeIds.size(); i++) {
         nodes.at(inputNodeIds.at(i))->postActivationValue = instance.x.at(i);
     }
 
-    // 3. Forward Pass in ID order
-    // This ensures node U is processed before node V if U -> V
-    for (int u = 0; u < (int)nodes.size(); u++) {
-        if (nodes[u] == nullptr) continue;
+    // 3. Forward Propagation (ID order ensures topological consistency for layers)
+    for (int i = 0; i < (int)nodes.size(); i++) {
+        if (nodes[i] == nullptr) continue;
 
-        // Check if u is an input node
         bool isInput = false;
-        for (int inId : inputNodeIds) {
-            if (u == inId) {
-                isInput = true;
-                break;
-            }
-        }
+        for (int id : inputNodeIds) if (id == i) isInput = true;
 
-        // Only activate (apply bias/activation) if it's NOT an input node
+        // Apply activation/bias only for non-input nodes
         if (!isInput) {
-            visitPredictNode(u);
+            visitPredictNode(i);
         }
 
-        // Send this node's signal to all its neighbors
-        for (auto& pair : adjacencyList.at(u)) {
-            Connection& c = pair.second;
-            visitPredictNeighbor(c); 
+        // Propagate values to neighbors
+        for (auto& pair : adjacencyList.at(i)) {
+            visitPredictNeighbor(pair.second);
         }
     }
 
-    vector<double> output;
+    std::vector<double> output;
     for (int id : outputNodeIds) {
         output.push_back(nodes.at(id)->postActivationValue);
     }
@@ -72,7 +69,7 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
 }
 
 bool NeuralNetwork::contribute(double y, double p) {
-    contributions.clear(); 
+    contributions.clear();
     for (int inputId : inputNodeIds) {
         contribute(inputId, y, p);
     }
@@ -83,19 +80,16 @@ bool NeuralNetwork::contribute(double y, double p) {
 double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
     if (contributions.count(nodeId)) return contributions[nodeId];
 
-    visitContributeStart(nodeId); 
+    visitContributeStart(nodeId);
 
     double outgoingContribution = 0;
-    // Base case: Output node (no outgoing edges)
+    // Output nodes have no outgoing connections in adjacencyList
     if (adjacencyList.at(nodeId).empty()) {
         outgoingContribution = -1.0 * ((y - p) / (p * (1.0 - p)));
     } else {
         for (auto& pair : adjacencyList.at(nodeId)) {
-            int neighborId = pair.first;
-            Connection& c = pair.second;
-            
-            double incomingContribution = contribute(neighborId, y, p);
-            visitContributeNeighbor(c, incomingContribution, outgoingContribution);
+            double incoming = contribute(pair.first, y, p);
+            visitContributeNeighbor(pair.second, incoming, outgoingContribution);
         }
     }
 
@@ -107,6 +101,7 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
 bool NeuralNetwork::update() {
     if (batchSize == 0) return false;
 
+    // Standard GD: param = param - (learningRate * total_gradient / batchSize)
     for (NodeInfo* node : nodes) {
         if (node) {
             node->bias -= (learningRate * (node->delta / (double)batchSize));
@@ -116,12 +111,11 @@ bool NeuralNetwork::update() {
 
     for (int i = 0; i < (int)adjacencyList.size(); i++) {
         for (auto& pair : adjacencyList[i]) {
-            Connection& c = pair.second;
-            c.weight -= (learningRate * (c.delta / (double)batchSize));
-            c.delta = 0; 
+            pair.second.weight -= (learningRate * (pair.second.delta / (double)batchSize));
+            pair.second.delta = 0;
         }
     }
-    
+
     batchSize = 0;
     flush();
     return true;
