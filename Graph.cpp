@@ -124,9 +124,6 @@ void Graph::updateConnection(int v, int u, double w) {
     // Access the Connection object and update its specific weight field
     adjacencyList[v][u].weight = w;
     
-    // It's also good practice to initialize the IDs if this is a new connection
-    adjacencyList[v][u].src = v;
-    adjacencyList[v][u].dest = u;
 }
 
 void Graph::clear() {
