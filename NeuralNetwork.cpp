@@ -132,10 +132,12 @@ bool NeuralNetwork::update() {
     if (batchSize == 0) return false;
 
     // Update node biases
-    for (auto& pair : nodes) {
-        NodeInfo* node = pair.second;
-        node->bias -= (learningRate * (node->delta / batchSize));
-        node->delta = 0;
+    // Since 'nodes' is a vector of NodeInfo*, 'node' is the pointer directly
+    for (NodeInfo* node : nodes) {
+        if (node != nullptr) {
+            node->bias -= (learningRate * (node->delta / batchSize));
+            node->delta = 0;
+        }
     }
 
     // Update connection weights
@@ -144,7 +146,7 @@ bool NeuralNetwork::update() {
             Connection& c = pair.second;
             // Access delta directly from the Connection object
             c.weight -= (learningRate * (c.delta / batchSize));
-            c.delta = 0; // Reset connection delta
+            c.delta = 0; 
         }
     }
     
