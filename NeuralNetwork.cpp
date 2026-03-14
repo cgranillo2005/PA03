@@ -7,47 +7,41 @@ using namespace std;
 
 // NeuralNetwork -----------------------------------------------------------------------------------------------------------------------------------
 
-// STUDENT TODO: IMPLEMENT
+// --- NeuralNetwork Getters and Setters ---
+
 void NeuralNetwork::eval() {
-    //stub
+    this->evaluating = true;
 }
 
-// STUDENT TODO: IMPLEMENT
 void NeuralNetwork::train() {
-    //stub
+    this->evaluating = false;
 }
 
-// STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setLearningRate(double lr) {
-    //stub
+    this->learningRate = lr;
 }
 
-// STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setInputNodeIds(std::vector<int> inputNodeIds) {
-    //stub
+    this->inputNodeIds = inputNodeIds;
 }
 
-// STUDENT TODO: IMPLEMENT
 void NeuralNetwork::setOutputNodeIds(std::vector<int> outputNodeIds) {
-    //stub
+    this->outputNodeIds = outputNodeIds;
 }
 
-// STUDENT TODO: IMPLEMENT
 vector<int> NeuralNetwork::getInputNodeIds() const {
-    return vector<int>(); //stub
+    return this->inputNodeIds;
 }
 
-// STUDENT TODO: IMPLEMENT
 vector<int> NeuralNetwork::getOutputNodeIds() const {
-    return vector<int>(); //stub
+    return this->outputNodeIds;
 }
 
-// STUDENT TODO: IMPLEMENT
-vector<double> NeuralNetwork::predict(DataInstance instance) {
+// --- NeuralNetwork Core Logic ---
 
+vector<double> NeuralNetwork::predict(DataInstance instance) {
     vector<double> input = instance.x;
 
-    // error checking : size mismatch
     if (input.size() != inputNodeIds.size()) {
         cerr << "input size mismatch." << endl;
         cerr << "\tNeuralNet expected input size: " << inputNodeIds.size() << endl;
@@ -55,12 +49,27 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
         return vector<double>();
     }
 
-    // BFT implementation goes here.
-    // Note: before traversal begins, each input value in `input` must be loaded into
-    // the corresponding input node's postActivationValue. Input nodes are not activated —
-    // their value is passed forward directly.
-    // Use visitPredictNode and visitPredictNeighbor to handle the neural network math
-    // at each step of your traversal.
+    // Initialize input nodes: Load values directly into postActivationValue
+    for (size_t i = 0; i < inputNodeIds.size(); i++) {
+        nodes.at(inputNodeIds.at(i))->postActivationValue = input.at(i);
+    }
+
+    // BFT Implementation: Layer-by-layer forward pass
+    queue<int> q;
+    for (int id : inputNodeIds) {
+        q.push(id);
+    }
+
+    while (!q.empty()) {
+        int u = q.front();
+        q.pop();
+
+        for (auto const& [v, weight] : adjacencyList.at(u)) {
+            visitPredictNode(v);
+            visitPredictNeighbor(u, v);
+            q.push(v);
+        }
+    }
 
     vector<double> output;
     for (int i = 0; i < outputNodeIds.size(); i++) {
@@ -72,68 +81,78 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
     if (evaluating) {
         flush();
     } else {
-        // increment batch size
         batchSize++;
-        // accumulate derivatives. If in training mode, weights and biases get accumulated
         contribute(instance.y, output.at(0));
     }
     return output;
 }
-// STUDENT TODO: IMPLEMENT
+
 bool NeuralNetwork::contribute(double y, double p) {
+    // Clear the contributions map (visited set) for this training instance
+    contributions.clear();
 
-    // DFT implementation goes here.
-    // This function initiates the recursion by calling the recursive helper
-    // starting from each input layer node.
-    // Note: input layer nodes do not have a bias to update, so visitContributeNode
-    // should not be called on them.
-    // The contributions map acts as your "visited" set and also stores each node's
-    // computed contribution so it is not recomputed if reached by multiple paths.
-
+    // Initiate recursive backpropagation starting from the input layer
+    for (int inputId : inputNodeIds) {
+        contribute(inputId, y, p);
+    }
 
     flush();
-
     return true;
 }
-// STUDENT TODO: IMPLEMENT
+
 double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
-    visitContributeStart(nodeId); // don't remove this line, used for visualization
-    // incomingContribution: the error signal returned by a recursive call on a neighbor.
-    double incomingContribution = 0;
-    // outgoingContribution: built up from this node's neighbors, then scaled by
-    // this node's activation derivative before being returned to the previous layer.
+    visitContributeStart(nodeId); 
+
+    // Memoization check: return value if already computed for this node
+    if (contributions.find(nodeId) != contributions.end()) {
+        return contributions[nodeId];
+    }
+
     double outgoingContribution = 0;
     NodeInfo* currNode = nodes.at(nodeId);
 
-    // If this node is already in the contributions map, return its stored value immediately.
-
     if (adjacencyList.at(nodeId).empty()) {
-        // Base case: output node (no outgoing connections).
-        // Seeds the backward pass with the initial error signal.
-        // You do not need to understand this derivation.
-        outgoingContribution = -1 * ((y - p) / (p * (1 - p)));
+        // Base case: Output node (no outgoing connections)
+        outgoingContribution = -1.0 * ((y - p) / (p * (1.0 - p)));
+    } else {
+        // Recursive step: sum error signals from all neighbors in next layer
+        for (auto const& [neighborId, weight] : adjacencyList.at(nodeId)) {
+            double incomingContribution = contribute(neighborId, y, p);
+            visitContributeNeighbor(nodeId, neighborId, incomingContribution);
+            outgoingContribution += (incomingContribution * weight);
+        }
     }
 
-    // Before returning, store outgoingContribution in the contributions map.
+    // Apply activation derivative and accumulate bias delta
+    outgoingContribution = visitContributeNode(nodeId, outgoingContribution);
 
+    // Store in contributions map before returning
+    contributions[nodeId] = outgoingContribution;
     return outgoingContribution;
 }
-// STUDENT TODO: IMPLEMENT
+
 bool NeuralNetwork::update() {
-    // apply the derivative contributions
+    if (batchSize == 0) return false;
 
-    // traverse the graph in anyway you want. 
-    // Each node has a delta term 
-    // Each connection has a delta term
+    // Update node biases and reset deltas
+    for (auto& pair : nodes) {
+        NodeInfo* node = pair.second;
+        node->bias = node->bias - (learningRate * (node->delta / batchSize));
+        node->delta = 0;
+    }
 
-    // use the formulas for each update
-    // bias update: bias = bias - (learningRate * delta)
-    // weight update: weight = weight - (learningRate * delta)
-    // reset the delta term for each node and connection to zero.
+    // Update connection weights and reset deltas
+    for (int i = 0; i < (int)adjacencyList.size(); i++) {
+        for (auto& [destId, weight] : adjacencyList.at(i)) {
+            double weightDelta = getConnectionDelta(i, destId);
+            weight = weight - (learningRate * (weightDelta / batchSize));
+            resetConnectionDelta(i, destId);
+        }
+    }
     
+    batchSize = 0;
     flush();
     return true;
-    
 }
 
 

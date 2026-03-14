@@ -89,41 +89,57 @@ std::ostream& operator<<(std::ostream& out, const Connection& c) {
 
 // Graph -----------------------------------------------------------------------------------------------------------------------------------
 
-// STUDENT TODO: IMPLEMENT
 void Graph::updateNode(int id, NodeInfo n) {
-    if (/* id is out of bounds — check if id is a valid index into nodes */ true) {
+    if (id < 0 || id >= (int)nodes.size()) {
         cout << "Attempting to update node with id: " << id << " but node does not exist" << endl;
         return;
     }
 
-    return; //stub
+    // Deallocate existing node at this ID to prevent memory leaks
+    if (nodes[id] != nullptr) {
+        delete nodes[id];
+    }
+    
+    // Allocate a new NodeInfo object on the heap
+    nodes[id] = new NodeInfo(n);
 }
 
-// STUDENT TODO: IMPLEMENT
 NodeInfo* Graph::getNode(int id) const {
-    return nullptr; //stub
+    if (id < 0 || id >= (int)nodes.size()) {
+        return nullptr;
+    }
+    return nodes[id];
 }
 
-// STUDENT TODO: IMPLEMENT
 void Graph::updateConnection(int v, int u, double w) {
-    if (/* v is out of bounds — check if v is a valid index into nodes */ true) {
+    if (v < 0 || v >= (int)nodes.size()) {
         cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << v << " does not exist" << endl;
         exit(1);
     }
-    if (/* u is out of bounds — check if u is a valid index into nodes */ true) {
+    if (u < 0 || u >= (int)nodes.size()) {
         cerr << "Attempting to update connection between " << v << " and " << u << " with weight " << w << " but " << u << " does not exist" << endl;
         exit(1);
     }
 
-    return; //stub
+    // Update the weight in the adjacency list map
+    // If the connection doesn't exist, the [] operator creates it
+    adjacencyList[v][u] = w;
 }
 
-// STUDENT TODO: IMPLEMENT
 void Graph::clear() {
-    return; //stub
+    // Deallocate all NodeInfo objects from the heap
+    for (size_t i = 0; i < nodes.size(); i++) {
+        if (nodes[i] != nullptr) {
+            delete nodes[i];
+            nodes[i] = nullptr;
+        }
+    }
+
+    // Clear all maps in the adjacency list
+    for (size_t i = 0; i < adjacencyList.size(); i++) {
+        adjacencyList[i].clear();
+    }
 }
-
-
 
 
 // ------------------------ YOU DO NOT NEED TO MODIFY THE REMAINING CODE (but please feel free to explore it!) --------------------------------------
