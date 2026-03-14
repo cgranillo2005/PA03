@@ -104,7 +104,6 @@ void Graph::updateConnection(int v, int u, double w) {
     if (v < 0 || v >= (int)nodes.size() || u < 0 || u >= (int)nodes.size()) {
         exit(1);
     }
-    // Update weight and destination. AdjacencyList is a vector of maps.
     Connection& c = adjacencyList[v][u];
     c.weight = w;
     c.dest = u; 

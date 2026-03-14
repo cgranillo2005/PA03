@@ -18,40 +18,42 @@ vector<int> NeuralNetwork::getInputNodeIds() const { return this->inputNodeIds; 
 vector<int> NeuralNetwork::getOutputNodeIds() const { return this->outputNodeIds; }
 
 vector<double> NeuralNetwork::predict(DataInstance instance) {
-    // 1. Initialize input layer
+    // 1. Reset all nodes for a clean pass
+    for (auto* node : nodes) {
+        if (node) {
+            node->preActivationValue = 0;
+            node->postActivationValue = 0;
+        }
+    }
+
+    // 2. Set input values
     for (size_t i = 0; i < inputNodeIds.size(); i++) {
         nodes.at(inputNodeIds.at(i))->postActivationValue = instance.x.at(i);
     }
 
-    // 2. Layer-by-layer BFT 
-    // In this lab, nodes are ordered by layer. To ensure weighted sums (neighbors) 
-    // are visited BEFORE the node itself is activated, we process all connections first.
-    queue<int> q;
-    for (int id : inputNodeIds) q.push(id);
-    
-    set<int> visited;
-    for (int id : inputNodeIds) visited.insert(id);
+    // 3. Forward Pass in ID order
+    // This ensures node U is processed before node V if U -> V
+    for (int u = 0; u < (int)nodes.size(); u++) {
+        if (nodes[u] == nullptr) continue;
 
-    while (!q.empty()) {
-        int u = q.front();
-        q.pop();
-
-        // Visit all outgoing neighbors from current node
-        for (auto& pair : adjacencyList.at(u)) {
-            int v = pair.first;
-            Connection& c = pair.second;
-            
-            // MATH: Accumulate weighted sum into node v
-            visitPredictNeighbor(c); 
-
-            if (visited.find(v) == visited.end()) {
-                // MATH: Add bias and activate node v
-                // IMPORTANT: In a layered NN, visitPredictNode should only be called 
-                // once all inputs to 'v' have been processed via visitPredictNeighbor.
-                visitPredictNode(v); 
-                visited.insert(v);
-                q.push(v);
+        // Check if u is an input node
+        bool isInput = false;
+        for (int inId : inputNodeIds) {
+            if (u == inId) {
+                isInput = true;
+                break;
             }
+        }
+
+        // Only activate (apply bias/activation) if it's NOT an input node
+        if (!isInput) {
+            visitPredictNode(u);
+        }
+
+        // Send this node's signal to all its neighbors
+        for (auto& pair : adjacencyList.at(u)) {
+            Connection& c = pair.second;
+            visitPredictNeighbor(c); 
         }
     }
 
@@ -84,25 +86,20 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
     visitContributeStart(nodeId); 
 
     double outgoingContribution = 0;
+    // Base case: Output node (no outgoing edges)
     if (adjacencyList.at(nodeId).empty()) {
-        // Output node base case
         outgoingContribution = -1.0 * ((y - p) / (p * (1.0 - p)));
     } else {
         for (auto& pair : adjacencyList.at(nodeId)) {
             int neighborId = pair.first;
             Connection& c = pair.second;
             
-            // Recurse to get the gradient contribution from the next layer
             double incomingContribution = contribute(neighborId, y, p);
-            
-            // MATH: Update weight delta and accumulate node contribution
             visitContributeNeighbor(c, incomingContribution, outgoingContribution);
         }
     }
 
-    // MATH: Update bias delta
     visitContributeNode(nodeId, outgoingContribution);
-    
     contributions[nodeId] = outgoingContribution;
     return outgoingContribution;
 }
@@ -110,7 +107,6 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
 bool NeuralNetwork::update() {
     if (batchSize == 0) return false;
 
-    // Update Biases: bias = bias - (lr * delta / batchSize)
     for (NodeInfo* node : nodes) {
         if (node) {
             node->bias -= (learningRate * (node->delta / (double)batchSize));
@@ -118,7 +114,6 @@ bool NeuralNetwork::update() {
         }
     }
 
-    // Update Weights: weight = weight - (lr * delta / batchSize)
     for (int i = 0; i < (int)adjacencyList.size(); i++) {
         for (auto& pair : adjacencyList[i]) {
             Connection& c = pair.second;
