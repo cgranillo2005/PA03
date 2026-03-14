@@ -121,9 +121,12 @@ void Graph::updateConnection(int v, int u, double w) {
         exit(1);
     }
 
-    // Update the weight in the adjacency list map
-    // If the connection doesn't exist, the [] operator creates it
-    adjacencyList[v][u] = w;
+    // Access the Connection object and update its specific weight field
+    adjacencyList[v][u].weight = w;
+    
+    // It's also good practice to initialize the IDs if this is a new connection
+    adjacencyList[v][u].src = v;
+    adjacencyList[v][u].dest = u;
 }
 
 void Graph::clear() {
